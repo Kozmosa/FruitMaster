@@ -9,13 +9,14 @@ import os
 import json
 
 # --- 配置参数 ---
-DATA_DIR = 'fruits_dataset' # 数据集根目录
+DATA_DIR = './fruit_dataset' # 数据集根目录
 # 使用验证集进行评估，或者如果您有单独的测试集，请指向测试集目录
-EVAL_DIR = os.path.join(DATA_DIR, 'val') # 或者 'test'
+EVAL_DIR = os.path.join(DATA_DIR, 'Test') # 或者 'test'
 NUM_CLASSES = 5
-BATCH_SIZE = 32
-MODEL_PATH = 'vgg16_fruit_classifier_fine_tuned.pth' # 或 'vgg16_fruit_classifier_initial.pth'
-CLASS_NAMES = ['Apple', 'Banana', 'Cherry', 'Mango', 'Pear'] # 确保顺序与训练时一致
+BATCH_SIZE = 8
+MODEL_DIR = 'model'
+MODEL_PATH = os.path.join(MODEL_DIR, 'vgg16_fruit_classifier_initial.pth') # 或 'vgg16_fruit_classifier_initial.pth'
+CLASS_NAMES = ['Apple', 'Banana', 'Cherry', 'Pear'] # 确保顺序与训练时一致
 
 # --- 数据加载 ---
 def get_eval_dataloader(eval_dir, batch_size):
@@ -83,6 +84,7 @@ def evaluate_model(model, dataloader, class_names_list, device='cpu'):
 
     # 可视化混淆矩阵
     plt.figure(figsize=(10, 8))
+    plt.rcParams['font.family'] = ['MiSans']
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names_list, yticklabels=class_names_list)
     plt.xlabel('预测标签 (Predicted Label)')
     plt.ylabel('真实标签 (True Label)')

@@ -10,7 +10,7 @@ NUM_CLASSES = 5
 # 类别名称应该与训练时 ImageFolder 生成的顺序一致
 # 最好是从训练脚本中保存类别列表并在预测时加载
 # 这里我们硬编码一个示例，实际应用中请确保这个列表是正确的
-CLASS_NAMES = ['Apple', 'Banana', 'Cherry', 'Mango', 'Pear'] # 请确保顺序正确！
+CLASS_NAMES = ['Apple', 'Banana', 'Cherry', 'Pear', 'Grape'] # 请确保顺序正确！
 MODEL_PATH = 'vgg16_fruit_classifier_fine_tuned.pth' # 或 'vgg16_fruit_classifier_initial.pth'
 IMAGE_TO_PREDICT = 'path/to/your/fruit_image.jpg' # 替换为你要预测的图片路径
 
