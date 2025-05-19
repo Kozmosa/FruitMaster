@@ -5,6 +5,7 @@ from torchvision import datasets, models, transforms
 import os
 import time
 import copy
+import matplotlib.pyplot as plt # 新增：导入matplotlib
 
 # --- 配置参数 ---
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
@@ -18,6 +19,11 @@ BATCH_SIZE = 8
 LEARNING_RATE = 0.001
 EPOCHS = 15 # 初步训练的轮数
 MODEL_SAVE_PATH = 'vgg16_fruit_classifier_initial.pth' # 初步训练模型保存路径
+
+# 图表保存路径
+ACC_PLOT_PATH = 'Figure_4_1_1_Preliminary_Training_Accuracy_Curve.png'
+LOSS_PLOT_PATH = 'Figure_4_1_2_Preliminary_Training_Loss_Curve.png'
+
 
 # 如果cache目录不存在，则创建
 if not os.path.exists(CACHE_DIR):
@@ -61,83 +67,125 @@ def get_dataloaders(train_dir, val_dir, batch_size):
     if len(class_names) != NUM_CLASSES:
         raise ValueError(f"数据集中找到 {len(class_names)} 个类别, 但期望 {NUM_CLASSES} 个。请检查数据集文件夹。")
     print(f"检测到的类别: {class_names}")
-    # 确保类别顺序与 NUM_CLASSES 对应
-    # 这里假设文件夹名称就是类别名称，并且顺序是我们期望的
-    # 实际应用中可能需要更复杂的映射
-
     return dataloaders, dataset_sizes, class_names
 
 # --- 模型定义 ---
 def get_model(num_classes):
-    # 加载预训练的VGG16模型
     model_vgg = models.vgg16(weights=models.VGG16_Weights.IMAGENET1K_V1)
-
-    # 冻结所有卷积层的参数
     for param in model_vgg.features.parameters():
         param.requires_grad = False
-
-    # 获取原始分类器的输入特征数
     num_ftrs = model_vgg.classifier[6].in_features
-    # 替换VGG16的最后一个全连接层以匹配我们的类别数量
     model_vgg.classifier[6] = nn.Linear(num_ftrs, num_classes)
-
     return model_vgg
 
-# --- 训练函数 ---
+# --- 训练函数 (已修改以包含绘图) ---
 def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=25, device='cpu'):
     since = time.time()
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
 
+    # 用于存储历史数据
+    history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': []}
+
+    # 初始化绘图窗口
+    plt.ion() # 开启交互模式
+    fig_acc, ax_acc = plt.subplots(figsize=(8, 6))
+    fig_loss, ax_loss = plt.subplots(figsize=(8, 6))
+
+    # 设置准确率图的初始标题和标签 (中文 + English)
+    ax_acc.set_title('准确率曲线 / Accuracy Curve')
+    ax_acc.set_xlabel('轮次 / Epoch')
+    ax_acc.set_ylabel('准确率 / Accuracy')
+    ax_acc.grid(True)
+
+    # 设置损失图的初始标题和标签
+    ax_loss.set_title('损失曲线 / Loss Curve')
+    ax_loss.set_xlabel('轮次 / Epoch')
+    ax_loss.set_ylabel('损失 / Loss')
+    ax_loss.grid(True)
+    
+    # 预先绘制图例，避免在循环中重复创建图例对象导致警告
+    line_train_acc, = ax_acc.plot([], [], 'r-o', label='训练集准确率 (Train Acc)')
+    line_val_acc, = ax_acc.plot([], [], 'b-o', label='验证集准确率 (Validation Acc)')
+    ax_acc.legend()
+
+    line_train_loss, = ax_loss.plot([], [], 'r-o', label='训练集损失 (Train Loss)')
+    line_val_loss, = ax_loss.plot([], [], 'b-o', label='验证集损失 (Validation Loss)')
+    ax_loss.legend()
+
+
     for epoch in range(num_epochs):
         print(f'Epoch {epoch}/{num_epochs - 1}')
         print('-' * 10)
 
+        epoch_metrics = {} # 存储当前epoch的 train/val loss/acc
+
         for phase in ['train', 'val']:
             if phase == 'train':
-                model.train()  # 设置模型为训练模式
+                model.train()
             else:
-                model.eval()   # 设置模型为评估模式
+                model.eval()
 
             running_loss = 0.0
             running_corrects = 0
 
-            # 迭代数据
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
-
-                # 清零参数梯度
                 optimizer.zero_grad()
 
-                # 前向传播
-                # 只在训练阶段跟踪历史记录
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
-                    # 只在训练阶段进行反向传播和优化
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
 
-                # 统计损失和准确率
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
+            
+            epoch_metrics[f'{phase}_loss'] = epoch_loss
+            epoch_metrics[f'{phase}_acc'] = epoch_acc.item() # .item()转为python float
 
             print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
-            # 深拷贝模型权重
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
                 torch.save(model.state_dict(), MODEL_SAVE_PATH)
                 print(f"模型已保存到: {MODEL_SAVE_PATH} (验证集准确率: {best_acc:.4f})")
 
+        # 记录当前epoch的数据
+        history['train_loss'].append(epoch_metrics['train_loss'])
+        history['train_acc'].append(epoch_metrics['train_acc'])
+        history['val_loss'].append(epoch_metrics['val_loss'])
+        history['val_acc'].append(epoch_metrics['val_acc'])
+
+        # 更新绘图
+        epochs_range = range(1, epoch + 2)
+
+        # 更新准确率图数据
+        line_train_acc.set_data(epochs_range, history['train_acc'])
+        line_val_acc.set_data(epochs_range, history['val_acc'])
+        ax_acc.relim() # 重新计算数据范围
+        ax_acc.autoscale_view(True,True,True) # 自动调整坐标轴
+        ax_acc.set_title(f'准确率曲线 (Epoch {epoch+1}/{num_epochs})')
+        fig_acc.canvas.draw_idle() # 更新图形显示
+
+        # 更新损失图数据
+        line_train_loss.set_data(epochs_range, history['train_loss'])
+        line_val_loss.set_data(epochs_range, history['val_loss'])
+        ax_loss.relim()
+        ax_loss.autoscale_view(True,True,True)
+        ax_loss.set_title(f'损失曲线 (Epoch {epoch+1}/{num_epochs})')
+        fig_loss.canvas.draw_idle()
+
+        plt.pause(0.1) # 暂停一小段时间以允许图形更新
 
         print()
 
@@ -145,34 +193,37 @@ def train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epo
     print(f'训练完成，耗时 {time_elapsed // 60:.0f}分 {time_elapsed % 60:.0f}秒')
     print(f'最佳验证集准确率: {best_acc:4f}')
 
-    # 加载最佳模型权重
+    # 保存最终的图表
+    ax_acc.set_title('初步训练阶段准确率曲线（训练集与验证集）') # 最终标题
+    fig_acc.savefig(ACC_PLOT_PATH)
+    print(f"准确率曲线图已保存到: {ACC_PLOT_PATH}")
+
+    ax_loss.set_title('初步训练阶段损失曲线（训练集与验证集）') # 最终标题
+    fig_loss.savefig(LOSS_PLOT_PATH)
+    print(f"损失曲线图已保存到: {LOSS_PLOT_PATH}")
+
+    plt.ioff() # 关闭交互模式
+
     model.load_state_dict(best_model_wts)
-    return model
+    return model, history
 
 
 # --- 主执行流程 ---
 if __name__ == '__main__':
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cpu") # 为了确保在没有GPU的环境下也能运行和绘图，这里强制使用CPU
+                                  # 如果您有CUDA环境并且matplotlib后端支持，可以改回自动检测
     
     print(f"使用设备: {device}")
 
     dataloaders, dataset_sizes, class_names_loaded = get_dataloaders(TRAIN_DIR, VAL_DIR, BATCH_SIZE)
-    # 将加载的类别名称保存，以便后续脚本使用
-    # 可以考虑将 class_names_loaded 保存到文件或作为全局变量传递
     print(f"训练类别: {class_names_loaded}")
-
 
     model = get_model(NUM_CLASSES)
     model = model.to(device)
 
-    # 定义损失函数
     criterion = nn.CrossEntropyLoss()
 
-    # 定义优化器 - 只优化新添加的分类层参数
-    # VGG16中，model.classifier 是一个 Sequential 模块
-    # 我们只希望训练 model.classifier[6] (我们新加的层)
-    # 或者，更安全的方式是迭代所有参数，只将 requires_grad=True 的参数传给优化器
     params_to_optimize = []
     for name, param in model.named_parameters():
         if param.requires_grad:
@@ -182,5 +233,12 @@ if __name__ == '__main__':
     optimizer = optim.Adam(params_to_optimize, lr=LEARNING_RATE)
 
     print("开始初步训练...")
-    trained_model = train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=EPOCHS, device=device)
+    # train_model 现在返回模型和历史记录
+    trained_model, training_history = train_model(model, dataloaders, dataset_sizes, criterion, optimizer, num_epochs=EPOCHS, device=device)
     print("初步训练完成!")
+
+    # print("\n训练历史:")
+    # for key in training_history:
+    #     print(f"{key}: {training_history[key]}")
+
+    plt.show() # 显示最终的图表，并保持窗口直到手动关闭
