@@ -1,0 +1,2 @@
+上传水果图片,预测结果,timestamp
+.gradio\flagged\上传水果图片\9f51c1bfd6735560ad27\7b480dc146280231d8a1742eaaee6ff.jpg,"{""label"": ""Cherry"", ""confidences"": [{""label"": ""Cherry"", ""confidence"": 1.0}, {""label"": ""Grape"", ""confidence"": 1.2704799235221942e-12}, {""label"": ""Pear"", ""confidence"": 6.288172732900418e-19}, {""label"": ""Banana"", ""confidence"": 4.1727283519983036e-22}, {""label"": ""Apple"", ""confidence"": 8.070308962231484e-23}]}",2025-05-18 22:23:17.396773

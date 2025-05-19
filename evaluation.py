@@ -12,7 +12,7 @@ import json
 DATA_DIR = './fruit_dataset' # 数据集根目录
 # 使用验证集进行评估，或者如果您有单独的测试集，请指向测试集目录
 EVAL_DIR = os.path.join(DATA_DIR, 'Test') # 或者 'test'
-NUM_CLASSES = 5
+NUM_CLASSES = 4
 BATCH_SIZE = 8
 MODEL_DIR = 'model'
 MODEL_PATH = os.path.join(MODEL_DIR, 'vgg16_fruit_classifier_initial.pth') # 或 'vgg16_fruit_classifier_initial.pth'
@@ -73,30 +73,73 @@ def evaluate_model(model, dataloader, class_names_list, device='cpu'):
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
 
-    print("\n--- 分类报告 ---")
-    # classification_report 需要目标名称
-    report = classification_report(all_labels, all_preds, target_names=class_names_list, digits=4)
-    print(report)
+    # --- 计算精确率、召回率、F1分数 ---
+    # classification_report 同时计算这些指标
+    # output_dict=True 可以让报告以字典形式返回，方便提取特定值
+    report_dict = classification_report(all_labels, all_preds, target_names=class_names_list, digits=4, output_dict=True, zero_division=0)
+    report_str = classification_report(all_labels, all_preds, target_names=class_names_list, digits=4, zero_division=0)
 
-    print("\n--- 混淆矩阵 ---")
+    print("\n--- 分类报告 (Classification Report) ---")
+    print(report_str)
+
+    # 单独提取并打印每个类别的 Precision, Recall, F1-Score
+    print("\n--- 各类别详细指标 ---")
+    for class_name in class_names_list:
+        if class_name in report_dict:
+            print(f"类别: {class_name}")
+            print(f"  精确率 (Precision): {report_dict[class_name]['precision']:.4f}")
+            print(f"  召回率 (Recall):    {report_dict[class_name]['recall']:.4f}")
+            print(f"  F1分数 (F1-Score):  {report_dict[class_name]['f1-score']:.4f}")
+            print(f"  支持数 (Support):   {report_dict[class_name]['support']}")
+        else:
+            print(f"类别: {class_name} - 在报告中未找到 (可能是因为该类别在测试集中没有样本或没有被正确预测)")
+
+    # 提取并打印平均指标
+    # 'macro avg'：计算每个类指标的未加权平均值。
+    # 'weighted avg'：计算每个类指标的加权平均值（按每个类的支持数加权）。
+    print("\n--- 平均指标 ---")
+    if 'macro avg' in report_dict:
+        print(f"宏平均精确率 (Macro Avg Precision): {report_dict['macro avg']['precision']:.4f}")
+        print(f"宏平均召回率 (Macro Avg Recall):    {report_dict['macro avg']['recall']:.4f}")
+        print(f"宏平均F1分数 (Macro Avg F1-Score):  {report_dict['macro avg']['f1-score']:.4f}")
+    
+    if 'weighted avg' in report_dict:
+        print(f"加权平均精确率 (Weighted Avg Precision): {report_dict['weighted avg']['precision']:.4f}")
+        print(f"加权平均召回率 (Weighted Avg Recall):    {report_dict['weighted avg']['recall']:.4f}")
+        print(f"加权平均F1分数 (Weighted Avg F1-Score):  {report_dict['weighted avg']['f1-score']:.4f}")
+
+
+    print("\n--- 混淆矩阵 (Confusion Matrix) ---")
     cm = confusion_matrix(all_labels, all_preds)
     print(cm)
 
     # 可视化混淆矩阵
     plt.figure(figsize=(10, 8))
-    plt.rcParams['font.family'] = ['MiSans']
+    # 尝试设置支持中文的字体，如果系统没有'MiSans'，可以替换为 'SimHei', 'Microsoft YaHei' 等
+    try:
+        plt.rcParams['font.family'] = ['MiSans', 'SimHei', 'Microsoft YaHei']
+    except:
+        print("警告：未能设置中文字体 'MiSans'。标签可能显示为方框。请安装支持中文的字体或修改代码中的字体设置。")
+        plt.rcParams['axes.unicode_minus'] = False # 解决负号显示问题
+
     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names_list, yticklabels=class_names_list)
     plt.xlabel('预测标签 (Predicted Label)')
     plt.ylabel('真实标签 (True Label)')
     plt.title('混淆矩阵 (Confusion Matrix)')
+    
     # 保存图像或显示
-    plt.savefig('confusion_matrix.png')
-    print("混淆矩阵图像已保存为 confusion_matrix.png")
+    try:
+        plt.savefig('confusion_matrix.png')
+        print("混淆矩阵图像已保存为 confusion_matrix.png")
+    except Exception as e:
+        print(f"保存混淆矩阵图像失败: {e}")
     # plt.show() # 如果在非GUI环境运行，可能需要注释掉
 
-    accuracy = np.sum(np.array(all_preds) == np.array(all_labels)) / len(all_labels)
+    accuracy = report_dict['accuracy'] # 从报告字典中获取准确率
     print(f"\n总体准确率 (Overall Accuracy): {accuracy:.4f}")
-    return accuracy
+    
+    # 返回所有计算出的指标字典以及准确率
+    return report_dict, accuracy
 
 # --- 主执行流程 ---
 if __name__ == '__main__':

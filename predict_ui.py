@@ -12,7 +12,7 @@ NUM_CLASSES = 5
 # 最好是从训练脚本中保存类别列表并在预测时加载
 # 这里我们硬编码一个示例，实际应用中请确保这个列表是正确的
 CLASS_NAMES = ['Apple', 'Banana', 'Cherry', 'Pear', 'Grape'] # 请确保顺序正确！
-MODEL_PATH = 'vgg16_fruit_classifier_initial.pth' # 或 'vgg16_fruit_classifier_initial.pth'
+MODEL_PATH = './model/vgg16_fruit_classifier_initial.pth' # 或 'vgg16_fruit_classifier_initial.pth'
 # 检查 MODEL_PATH 是否存在
 if not os.path.exists(MODEL_PATH):
     print(f"警告: 模型文件 {MODEL_PATH} 未找到。请确保路径正确或文件存在。")
