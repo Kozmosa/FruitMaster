@@ -5,6 +5,9 @@ cache/
 model/
 *.pth
 
+# clear gradio dir
+.gradio/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
